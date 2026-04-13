@@ -1,4 +1,6 @@
-google-genai>=0.3.0
-Pillow
 streamlit
 pandas
+Pillow
+google-genai>=0.3.0
+gspread
+google-auth
