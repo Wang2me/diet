@@ -37,7 +37,7 @@ if img_file:
             img_bytes = img_file.getvalue()
             result = client.models.generate_content(
                 model="gemini-1.5-flash",
-                contents=[analysis_prompt, img_bytes],
+                contents=[analysis_prompt, img],
             )
             st.success("分析完成")
             st.write(result.text)
