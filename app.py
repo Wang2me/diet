@@ -1,7 +1,6 @@
 import streamlit as st
 from PIL import Image
 import google.genai as genai
-from google.genai.types import Content, Part
 import os
 
 st.set_page_config(page_title="减脂助手", page_icon="🥗")
@@ -19,6 +18,7 @@ st.header("📸 拍照分析一餐热量")
 img_file = st.camera_input("对着食物拍一张")
 
 if img_file:
+    # 展示图片
     img = Image.open(img_file)
     st.image(img, caption="待分析的食物", width="stretch")
 
@@ -28,20 +28,16 @@ if img_file:
     2. 估算每种食物的热量和这顿饭的总热量。
     3. 粗略给出碳水 / 蛋白质 / 脂肪的比例。
     4. 给出一句简短的、能督促我控制饮食的建议。
+    输出用简洁的中文分点描述。
     """
 
     with st.spinner("AI 正在分析这顿饭的热量..."):
         try:
+            # 关键：直接传文本 + 图片二进制
+            img_bytes = img_file.getvalue()
             result = client.models.generate_content(
                 model="gemini-1.5-flash",
-                contents=[
-                    Content(
-                        parts=[
-                            Part.from_text(analysis_prompt),
-                            Part.from_image(img),
-                        ]
-                    )
-                ],
+                contents=[analysis_prompt, img_bytes],
             )
             st.success("分析完成")
             st.write(result.text)
