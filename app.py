@@ -24,7 +24,7 @@ client = genai.Client(api_key=api_key)
 
 # !!! 把这里改成你通过侧边栏“查看可用模型”按钮看到的可用模型名 !!!
 # 例如：MODEL_NAME = "models/gemini-2.0-flash-exp"
-MODEL_NAME = "models/gemini-2.0-flash-exp"
+MODEL_NAME = "models/gemini-2.0-flash"
 
 DATA_FILE = "data.csv"
 
