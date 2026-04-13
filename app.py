@@ -203,7 +203,7 @@ if uploaded_img is not None:
                 json_end = text.rfind("}")
                 meal_json = None
                 total_cal = None
-
+                
                 if json_start != -1 and json_end != -1 and json_end > json_start:
                     json_str = text[json_start:json_end + 1]
                     try:
@@ -212,20 +212,20 @@ if uploaded_img is not None:
                         st.subheader("🍽️ 结构化营养数据")
                         st.json(meal_json)
                     except Exception:
-                        st.warning("解析 JSON 失败，仅使用文本进行热量提取。")
-
-                # ----- 记录本次用餐 -----
-                if total_cal and total_cal > 0:
-                    add_meal_record(total_cal, text)
-                    st.success(f"已记录本次用餐：约 {total_cal:.0f} kcal")
-                else:
-                    # 兜底，用正则从文本里提取
-                    total_cal = extract_total_calories(text)
-                    if total_cal:
-                        add_meal_record(total_cal, text)
-                        st.success(f"已记录本次用餐：约 {total_cal:.0f} kcal（从文本提取）")
+                        st.warning("解析 JSON 失败，将不自动记录热量。")
+                
+                # ----- 记录本次用餐的逻辑（更严格） -----
+                if meal_json is not None:
+                    # 如果模型返回 items 为空或 total_calories 为 0，视为“未识别成功”，不记录
+                    items = meal_json.get("items", [])
+                    if (not items) or (total_cal is None) or (total_cal <= 0):
+                        st.warning("模型未识别出有效食物或总热量为 0，本次不记录热量。")
                     else:
-                        st.warning("未能可靠提取总热量，需要你自己估一下这顿饭的大致热量。")
+                        add_meal_record(total_cal, text)
+                        st.success(f"已记录本次用餐：约 {total_cal:.0f} kcal")
+                else:
+                    # 连 JSON 都解析不了，宁可不记，也不要乱猜
+                    st.warning("未能可靠提取结构化热量信息，本次不自动记录。")
 
             except Exception as e:
                 st.error("分析出错，请查看日志。")
