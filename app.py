@@ -11,7 +11,18 @@ if not api_key:
     st.stop()
 
 client = genai.Client(api_key=api_key)
-
+with st.sidebar:
+    st.subheader("🧪 调试工具")
+    if st.button("查看可用模型"):
+        try:
+            models = client.models.list()
+            names = [m.name for m in models]
+            st.write("当前这把 API Key 可用的模型：")
+            for n in names:
+                st.write("-", n)
+        except Exception as e:
+            st.error("列出模型失败：")
+            st.exception(e)
 st.title("🥗 我的减脂拍照助手")
 
 st.header("📸 拍照分析一餐热量")
