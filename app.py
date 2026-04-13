@@ -1,62 +1,47 @@
 import streamlit as st
-import os
-
-from PIL import Image
 import google.generativeai as genai
+from PIL import Image
+import json
 
-try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-except KeyError:
-    st.error("请在 Streamlit Cloud 的 Secrets 中配置 GEMINI_API_KEY")
-    st.stop()
+# 配置（建議在 Secrets 中設置 GOOGLE_API_KEY）
+genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+# 使用 1.5-flash 模型，它是圖像理解性價比最高的選擇
+# 如果 404，請確保名稱完全匹配
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 建议使用 flash 模型，速度快，适合实时打卡
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+st.title("🥗 智能減脂視覺助手")
 
-# 设置页面标题
-st.set_page_config(page_title="私人减脂助手", page_icon="🥗", layout="centered")
-st.title("🥗 我的私人减脂助手")
-
-# 2. 侧边栏：体脂数据输入
+# 1. 身體數據（側邊欄）
 with st.sidebar:
-    st.header("📈 当前身体数据")
-    weight = st.number_input("体重 (kg)", min_value=30.0, max_value=200.0, value=70.0, step=0.1)
-    fat_rate = st.number_input("体脂率 (%)", min_value=5.0, max_value=60.0, value=20.0, step=0.1)
-    target_calorie = st.number_input("今日目标摄入 (kcal)", min_value=1000, max_value=4000, value=1800, step=100)
-    
-    st.markdown("---")
-    st.info("💡 提示：准确的体脂数据能让 AI 给出更精准的建议。")
+    st.header("👤 個人狀態")
+    # 這裡可以加入文件上傳，自動識別體重
+    uploaded_report = st.file_uploader("拍一下體脂秤或報告", type=['jpg','png'])
+    if uploaded_report:
+        # 圖像理解：提取體脂數據
+        with st.spinner("正在讀取報告..."):
+            res = model.generate_content(["提取圖中的體重和體脂率，以JSON格式返回: {'weight': float, 'fat': float}", Image.open(uploaded_report)])
+            st.json(res.text)
 
-# 3. 主界面：拍照打卡核心区
-st.header("📸 饮食拍照打卡")
-# 移动端打开时，这里会自动调用手机摄像头
-img_file = st.camera_input("对着食物拍一张，或点击上传")
+# 2. 食物拍照分析（主介面）
+img_file = st.camera_input("拍攝今日午餐")
 
-if img_file is not None:
-    # 读取图片
+if img_file:
     img = Image.open(img_file)
-    st.image(img, caption="待分析的食物", use_container_width=True)
+    st.image(img, use_container_width=True)
     
-    # 构建精准的 Prompt
-    prompt = f"""
-    你是一个严厉且专业的减脂教练。用户当前体重 {weight}kg，体脂率 {fat_rate}%，今日目标摄入热量 {target_calorie} kcal。
-    请分析照片中的食物：
-    1. 识别食物种类。
-    2. 估算大致分量和总热量 (kcal)。
-    3. 给出粗略的宏量营养素占比（碳水、蛋白质、脂肪）。
-    4. 结合用户的身体数据和目标热量，给出严厉且直接的今日后续饮食建议。
-    输出格式要求清晰易读。
+    # 圖像理解：精準分析
+    # 重點：引導模型進行物理維度估算
+    analysis_prompt = """
+    作為專業營養師，請詳細分析此圖片：
+    1. 識別盤中所有食物。
+    2. 觀察食物與餐具（如筷子/盤子）的比例，精確估算重量。
+    3. 計算總熱量和宏量營養素（碳水、蛋白、脂肪）。
+    4. 輸出要求：先給出數據清單，再給出簡短的減脂建議。
     """
     
-    # 调用 AI 进行分析
-    with st.spinner('教练正在紧盯你的盘子，分析计算中...'):
-        try:
-            response = model.generate_content([prompt, img])
-            st.success("分析完成！")
-            st.markdown("### 📊 教练反馈")
-            st.write(response.text)
-        except Exception as e:
-            st.error(f"分析出错啦，请检查网络或 API Key。错误信息：{e}")
+    with st.spinner("AI 正在掃描食物..."):
+        response = model.generate_content([analysis_prompt, img])
+        st.markdown("---")
+        st.subheader("📊 營養分析報告")
+        st.write(response.text)
