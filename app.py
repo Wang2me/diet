@@ -11,10 +11,10 @@ except KeyError:
     st.stop()
 
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # 建议使用 flash 模型，速度快，适合实时打卡
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('gemini-1.5-flash-latest')
 
 # 设置页面标题
 st.set_page_config(page_title="私人减脂助手", page_icon="🥗", layout="centered")
