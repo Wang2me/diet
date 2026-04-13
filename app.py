@@ -128,8 +128,13 @@ with st.sidebar:
                              value=default_weight, step=0.1)
     body_fat = st.number_input("体脂率 (%)", min_value=5.0, max_value=60.0,
                                value=default_body_fat, step=0.1)
-    target_cal = st.number_input("今日目标摄入 (kcal)", min_value=1000,
-                                 max_value=4000, value=default_target_cal, step=100)
+    target_cal = st.number_input(
+        "今日目标摄入 (kcal)",
+        min_value=1000.0,
+        max_value=4000.0,
+        value=float(default_target_cal),
+        step=100.0,
+    )
 
     st.markdown("---")
     # 昨日总摄入
