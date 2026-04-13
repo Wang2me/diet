@@ -47,7 +47,7 @@ if img_file:
             # 关键：直接传文本 + 图片二进制
             img_bytes = img_file.getvalue()
             result = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="models/gemini-2.5-flash",
                 contents=[analysis_prompt, img],
             )
             st.success("分析完成")
