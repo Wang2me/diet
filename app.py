@@ -8,7 +8,8 @@ import pandas as pd
 from PIL import Image
 
 import google.genai as genai
-
+import gspread
+from google.oauth2.service_account import Credentials
 # ------------------ 基础配置 ------------------
 
 st.set_page_config(page_title="减脂拍照助手", page_icon="🥗")
@@ -21,7 +22,24 @@ if not api_key:
 
 # 初始化客户端
 client = genai.Client(api_key=api_key)
+# ------------------ Google Sheets 初始化 ------------------
 
+SHEET_ID = st.secrets["GOOGLE_SHEET_ID"]
+
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+# 从 Secrets 里的 service account 信息创建凭证
+creds = Credentials.from_service_account_info(
+    st.secrets["gcp_service_account"],
+    scopes=SCOPES,
+)
+
+gs_client = gspread.authorize(creds)
+sheet = gs_client.open_by_key(SHEET_ID)
+
+# 对应 Google 表格里两个工作表（tab），名字需与表中一致：meals, body
+meals_ws = sheet.worksheet("meals")
+body_ws = sheet.worksheet("body")
 # !!! 把这里改成你在“查看可用模型”按钮里看到的模型名 !!!
 # 例如：MODEL_NAME = "models/gemini-2.5-flash"
 MODEL_NAME = "models/gemini-2.5-flash"
@@ -41,11 +59,12 @@ def extract_total_calories(text: str) -> float | None:
 
 
 def add_meal_record(calories: float, raw_text: str):
-    """把本次用餐记录追加到 data.csv 中"""
+    """把本次用餐记录追加到本地 CSV 和 Google Sheets"""
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
+    # ---- 写本地 CSV（原逻辑） ----
     if os.path.exists(DATA_FILE):
         df = pd.read_csv(DATA_FILE)
     else:
@@ -60,13 +79,23 @@ def add_meal_record(calories: float, raw_text: str):
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df.to_csv(DATA_FILE, index=False)
 
+    # ---- 同步写入 Google Sheets（meals 表） ----
+    try:
+        meals_ws.append_row(
+            [date_str, time_str, calories, raw_text],
+            value_input_option="USER_ENTERED",
+        )
+    except Exception as e:
+        # 不影响主流程，失败了只是提醒一下
+        st.warning(f"写入 Google Sheets (meals) 失败：{e}")
 
 def add_body_record(weight: float, body_fat: float, target_cal: float):
-    """把当前身体指标写入 body.csv（每天可写多次，我们取最近一条）"""
+    """把当前身体指标写入本地 CSV 和 Google Sheets"""
     now = datetime.now()
     date_str = now.strftime("%Y-%m-%d")
     time_str = now.strftime("%H:%M:%S")
 
+    # ---- 写本地 CSV ----
     if os.path.exists(BODY_FILE):
         df = pd.read_csv(BODY_FILE)
     else:
@@ -81,6 +110,15 @@ def add_body_record(weight: float, body_fat: float, target_cal: float):
     }
     df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
     df.to_csv(BODY_FILE, index=False)
+
+    # ---- 同步写入 Google Sheets（body 表） ----
+    try:
+        body_ws.append_row(
+            [date_str, time_str, weight, body_fat, target_cal],
+            value_input_option="USER_ENTERED",
+        )
+    except Exception as e:
+        st.warning(f"写入 Google Sheets (body) 失败：{e}")
 
 
 def load_latest_body():
@@ -159,7 +197,7 @@ with st.sidebar:
 
         ocr_prompt = """
         这是一张体脂秤的屏幕照片，请你只做一件事：
-        1. 从中精确识别：体重(kg) 和 体脂率(%)。
+        1. 从中精确识别：体重(kg) 和 体脂率(%)，和其他与健康相关的所有指标
         2. 只用 JSON 返回，格式如下：
         {"weight": 67.3, "body_fat": 18.5}
         不要多写任何解释、注释或其它文字。
@@ -244,7 +282,7 @@ if uploaded_img is not None:
     注意：
     1. JSON 部分必须是合法 JSON，不要加注释，不要多写字段。
     2. 热量单位用 kcal，重量单位用克。
-    3. 点评要简洁、直接，语气可以稍微严格一点，像真正盯着用户减脂的教练。
+    3. 点评要简洁、直接，专业。
     """
 
     if st.button("开始分析这一餐", type="primary"):
@@ -318,7 +356,6 @@ if os.path.exists(DATA_FILE):
                 y_total_text = f"{y_str} 约 {y_total:.0f} kcal"
 
             summary_prompt = f"""
-            你是一名严格但负责任的减脂教练，说话可以直接一点，但不要辱骂。
 
             用户当前数据：
             - 体重：{weight:.1f} kg
@@ -338,7 +375,7 @@ if os.path.exists(DATA_FILE):
 
             要求：
             - 控制在 200 字左右。
-            - 语气可以略严厉，像一个真正盯着用户减脂的教练。
+            - 像一个真正盯着用户减脂的教练。
             - 不要复读表格内容，直接给结论和行动建议。
             """
 
