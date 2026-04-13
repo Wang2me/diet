@@ -1,47 +1,49 @@
 import streamlit as st
-import google.generativeai as genai
 from PIL import Image
-import json
+import google.generativeai as genai
+import os
 
-# 配置（建議在 Secrets 中設置 GOOGLE_API_KEY）
-genai.configure(api_key=st.secrets["GOOGLE_API_KEY"])
+st.set_page_config(page_title="减脂助手", page_icon="🥗")
 
-# 使用 1.5-flash 模型，它是圖像理解性價比最高的選擇
-# 如果 404，請確保名稱完全匹配
-model = genai.GenerativeModel('gemini-1.5-flash')
+# 1. 读取 API Key（从环境变量或 Secrets）
+api_key = os.getenv("GOOGLE_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+if not api_key:
+    st.error("没有找到 GOOGLE_API_KEY，请在 Streamlit 的 Secrets 里配置。")
+    st.stop()
 
-st.title("🥗 智能減脂視覺助手")
+genai.configure(api_key=api_key)
 
-# 1. 身體數據（側邊欄）
-with st.sidebar:
-    st.header("👤 個人狀態")
-    # 這裡可以加入文件上傳，自動識別體重
-    uploaded_report = st.file_uploader("拍一下體脂秤或報告", type=['jpg','png'])
-    if uploaded_report:
-        # 圖像理解：提取體脂數據
-        with st.spinner("正在讀取報告..."):
-            res = model.generate_content(["提取圖中的體重和體脂率，以JSON格式返回: {'weight': float, 'fat': float}", Image.open(uploaded_report)])
-            st.json(res.text)
+# 2. 初始化模型 —— 注意：这里只用 **gemini-1.5-flash**，不要加 models/
+try:
+    model = genai.GenerativeModel("gemini-1.5-flash")
+except Exception as e:
+    st.error(f"模型初始化失败，请检查 google-generativeai 版本和 API Key：{e}")
+    st.stop()
 
-# 2. 食物拍照分析（主介面）
-img_file = st.camera_input("拍攝今日午餐")
+st.title("🥗 我的减脂拍照助手")
+
+st.header("📸 拍照分析一餐热量")
+img_file = st.camera_input("对着食物拍一张")
 
 if img_file:
     img = Image.open(img_file)
-    st.image(img, use_container_width=True)
-    
-    # 圖像理解：精準分析
-    # 重點：引導模型進行物理維度估算
+    st.image(img, caption="待分析的食物", use_container_width=True)
+
     analysis_prompt = """
-    作為專業營養師，請詳細分析此圖片：
-    1. 識別盤中所有食物。
-    2. 觀察食物與餐具（如筷子/盤子）的比例，精確估算重量。
-    3. 計算總熱量和宏量營養素（碳水、蛋白、脂肪）。
-    4. 輸出要求：先給出數據清單，再給出簡短的減脂建議。
+    你是一个专业减脂营养师。请分析这张照片中的食物：
+    1. 列出主要食物及估算克数。
+    2. 估算每种食物的热量和这顿饭的总热量。
+    3. 粗略给出碳水 / 蛋白质 / 脂肪的比例。
+    4. 给出一句简短的减脂建议。
+
+    输出要清晰、有条理。
     """
-    
-    with st.spinner("AI 正在掃描食物..."):
-        response = model.generate_content([analysis_prompt, img])
-        st.markdown("---")
-        st.subheader("📊 營養分析報告")
-        st.write(response.text)
+
+    with st.spinner("AI 正在分析这顿饭的热量..."):
+        try:
+            response = model.generate_content([analysis_prompt, img])
+            st.success("分析完成")
+            st.write(response.text)
+        except Exception as e:
+            st.error("分析出错，请看日志（Manage app -> Logs）。")
+            st.exception(e)
